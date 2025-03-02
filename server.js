@@ -7,8 +7,14 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-const pub = createClient();
-const sub = createClient();
+const pub = createClient({
+    url: process.env.REDIS_URL
+});
+
+const sub = createClient({
+    url: process.env.REDIS_URL
+});
+
 
 async function startRedis() {
     await pub.connect();
