@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import useWebSocket from "react-use-websocket";
 
-const WS_URL = "ws://localhost:3000";
+const WS_URL = "wss://chat-server.onrender.com";
+
 
 const Chat = () => {
     const { sendMessage, lastMessage } = useWebSocket(WS_URL);
