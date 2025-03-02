@@ -13,7 +13,7 @@ const { createClient } = require("redis");
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
-const { createClient } = require("redis");
+
 
 
 // Set up Redis for Pub/Sub
