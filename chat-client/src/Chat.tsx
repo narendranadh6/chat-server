@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import useWebSocket from "react-use-websocket";
 
-const WS_URL = "wss://chat-server.onrender.com";
+const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
+
 
 
 const Chat = () => {
