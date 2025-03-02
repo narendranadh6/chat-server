@@ -1,7 +1,13 @@
-import express from "express";
-import { createServer } from "http";
-import { WebSocketServer } from "ws"; // Correct import for WebSockets
+//import express from "express";
+//import { createServer } from "http";
+//import { WebSocketServer } from "ws"; // Correct import for WebSockets
 //import { createClient } from "redis";
+
+const express = require("express");
+const { createServer } = require("http");
+const { WebSocketServer } = require("ws");
+const { createClient } = require("redis");
+
 
 // Create Express app and HTTP server
 const app = express();
