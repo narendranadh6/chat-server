@@ -7,7 +7,6 @@ interface ChatMessage {
     sender: string;
     text: string;
     time: string;
-    self?: boolean;
 }
 
 const Chat: React.FC = () => {
@@ -15,15 +14,14 @@ const Chat: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [username, setUsername] = useState("");
+    const [showPopup, setShowPopup] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (lastMessage !== null) {
-            const receivedData = JSON.parse(lastMessage.data);
+            const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-            if (receivedData.sender === username) {
-                return; // Ignore duplicate self-messages from Redis
-            }
+            if (receivedData.sender === username) return;
 
             setMessages((prev) => [...prev, receivedData]);
         }
@@ -32,6 +30,17 @@ const Chat: React.FC = () => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
+
+    const handleJoinChat = () => {
+        if (input.trim() !== "") {
+            setUsername(input);
+            setShowPopup(true); // ✅ Show popup when user joins
+
+            setTimeout(() => {
+                setShowPopup(false); // ✅ Hide popup after 3 seconds
+            }, 3000);
+        }
+    };
 
     const handleSend = () => {
         if (input.trim() === "" || username.trim() === "") return;
@@ -42,8 +51,9 @@ const Chat: React.FC = () => {
             time: new Date().toLocaleTimeString(),
         };
 
-        sendMessage(JSON.stringify(messageData)); // Send as JSON
-        setMessages([...messages, { ...messageData, self: true }]);
+        sendMessage(JSON.stringify(messageData));
+
+        setMessages([...messages, messageData]);
         setInput("");
     };
 
@@ -51,16 +61,19 @@ const Chat: React.FC = () => {
         <div style={styles.container}>
             <h2 style={styles.title}>💬 Real-Time Chat</h2>
 
-            {/* Username Input */}
+            {/* ✅ Show Popup When User Joins */}
+            {showPopup && <div style={styles.popup}>✅ Joined as <b>{username}</b></div>}
+
             {!username ? (
                 <div style={styles.usernameContainer}>
                     <input
                         type="text"
-                        placeholder="Enter your name..."
-                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Enter your full name..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
                         style={styles.input}
                     />
-                    <button onClick={() => username.trim() && setUsername(username)} style={styles.sendButton}>
+                    <button onClick={handleJoinChat} style={styles.sendButton}>
                         Join Chat
                     </button>
                 </div>
@@ -68,7 +81,7 @@ const Chat: React.FC = () => {
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div key={i} style={msg.self ? styles.myMessage : styles.otherMessage}>
+                            <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
                                 <strong>{msg.sender}: </strong> <span>{msg.text}</span>
                                 <small style={styles.timestamp}>{msg.time}</small>
                             </div>
@@ -76,7 +89,6 @@ const Chat: React.FC = () => {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Message Input */}
                     <div style={styles.inputContainer}>
                         <input
                             type="text"
@@ -107,6 +119,18 @@ const styles: { [key: string]: React.CSSProperties } = {
     },
     title: {
         color: "#333",
+    },
+    popup: {
+        position: "absolute",
+        top: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        backgroundColor: "#4CAF50",
+        color: "white",
+        padding: "10px 20px",
+        borderRadius: "5px",
+        fontWeight: "bold",
+        boxShadow: "0px 2px 5px rgba(0,0,0,0.3)",
     },
     usernameContainer: {
         display: "flex",
