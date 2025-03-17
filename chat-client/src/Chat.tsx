@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
-import { FaMicrophone, FaPaperPlane } from "react-icons/fa6";
+import { FaPaperPlane } from "react-icons/fa6";
+import { FaMicrophone } from "react-icons/fa6";
+
 
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
@@ -141,12 +143,13 @@ const Chat: React.FC = () => {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               className="border p-2 rounded flex-1"
             />
-            <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded"><FaPaperPlane /></button>
-            {isRecording ? (
-              <button onClick={stopRecording} className="bg-red-500 text-white p-2 rounded">⏹</button>
-            ) : (
-              <button onClick={startRecording} className="bg-gray-500 text-white p-2 rounded"><FaMicrophone /></button>
-            )}
+            <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded">
+            <FaPaperPlane />
+            </button>
+            <button onClick={startRecording} className="bg-gray-500 text-white p-2 rounded">
+            <FaMicrophone />
+            </button>
+
           </div>
         </>
       )}
