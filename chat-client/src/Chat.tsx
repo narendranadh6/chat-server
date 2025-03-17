@@ -17,32 +17,23 @@ const Chat: React.FC = () => {
     const [input, setInput] = useState("");
     const [username, setUsername] = useState("");
     const [isTyping, setIsTyping] = useState(false);
-    const [recording, setRecording] = useState(false);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
-
-            if (receivedData.type === "join") {
-                setMessages((prevMessages) => [
-                    ...prevMessages,
-                    { sender: "System", text: `${receivedData.sender} joined the chat`, time: receivedData.time, type: "system" }
-                ]);
-            } else if (receivedData.type === "typing") {
-                if (receivedData.sender !== username) {
-                    setIsTyping(true);
-                    setTimeout(() => setIsTyping(false), 2000);
+            setMessages((prev) => {
+                // Remove duplicate join messages
+                if (
+                    receivedData.type === "join" &&
+                    prev.some((msg) => msg.text === `${receivedData.sender} joined the chat`)
+                ) {
+                    return prev;
                 }
-            } else if (receivedData.type === "audio") {
-                setMessages((prevMessages) => [...prevMessages, receivedData]);
-            } else {
-                setMessages((prevMessages) => [...prevMessages, receivedData]);
-            }
+                return [...prev, receivedData];
+            });
         }
-    }, [lastMessage, username]);
+    }, [lastMessage]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,51 +66,13 @@ const Chat: React.FC = () => {
         sendMessage(JSON.stringify({ sender: username, type: "typing" }));
     };
 
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunksRef.current.push(event.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-                const audioUrl = URL.createObjectURL(audioBlob);
-
-                const audioMessage: ChatMessage = {
-                    sender: username,
-                    audio: audioUrl,
-                    time: new Date().toLocaleTimeString(),
-                    type: "audio",
-                };
-
-                sendMessage(JSON.stringify(audioMessage));
-                setMessages((prev) => [...prev, audioMessage]);
-            };
-
-            mediaRecorder.start();
-            setRecording(true);
-        } catch (error) {
-            console.error("Error accessing microphone:", error);
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-            setRecording(false);
-        }
-    };
-
     return (
         <div style={styles.container}>
-            <h2 style={styles.title}>💬 Real-Time Chat</h2>
-
-            {username && <div style={styles.userHeader}>You joined as <b>{username}</b></div>}
+            {username && (
+                <div style={styles.header}>
+                    <span style={styles.headerText}>You joined as <b>{username}</b></span>
+                </div>
+            )}
 
             {!username ? (
                 <div style={styles.usernameContainer}>
@@ -130,15 +83,21 @@ const Chat: React.FC = () => {
                         onChange={(e) => setInput(e.target.value)}
                         style={styles.input}
                     />
-                    <button onClick={handleJoinChat} style={styles.sendButton}>Join Chat</button>
+                    <button onClick={handleJoinChat} style={styles.joinButton}>Join</button>
                 </div>
             ) : (
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div 
-                                key={i} 
-                                style={msg.type === "system" ? styles.systemMessage : (msg.sender === username ? styles.myMessage : styles.otherMessage)}
+                            <div
+                                key={i}
+                                style={
+                                    msg.type === "system"
+                                        ? styles.systemMessage
+                                        : msg.sender === username
+                                            ? styles.myMessage
+                                            : styles.otherMessage
+                                }
                             >
                                 {msg.type === "audio" ? (
                                     <>
@@ -174,11 +133,6 @@ const Chat: React.FC = () => {
                             style={styles.input}
                         />
                         <button onClick={handleSend} style={styles.sendButton}>Send</button>
-                        {!recording ? (
-                            <button onClick={startRecording} style={styles.recordButton}>🎙️</button>
-                        ) : (
-                            <button onClick={stopRecording} style={styles.stopButton}>⏹️</button>
-                        )}
                     </div>
                 </>
             )}
@@ -187,12 +141,113 @@ const Chat: React.FC = () => {
 };
 
 const styles: { [key: string]: React.CSSProperties } = {
-    container: { width: "50%", margin: "auto", fontFamily: "Arial, sans-serif", textAlign: "center", backgroundColor: "#f4f4f4", padding: "20px", borderRadius: "10px", boxShadow: "0px 4px 10px rgba(0,0,0,0.1)" },
-    title: { color: "#333" },
-    userHeader: { fontSize: "16px", fontWeight: "bold", padding: "10px", backgroundColor: "#e6e6e6", borderRadius: "5px", marginBottom: "10px", display: "inline-block" },
-    chatBox: { height: "300px", overflowY: "auto", backgroundColor: "#fff", padding: "10px", borderRadius: "8px", boxShadow: "inset 0px 2px 5px rgba(0,0,0,0.1)" },
-    systemMessage: { textAlign: "center", color: "#666", fontStyle: "italic", fontSize: "14px", margin: "10px 0" },
-    inputContainer: { display: "flex", marginTop: "10px" },
+    container: {
+        width: "50%",
+        margin: "auto",
+        fontFamily: "Arial, sans-serif",
+        textAlign: "center",
+        backgroundColor: "#f4f4f4",
+        padding: "20px",
+        borderRadius: "10px",
+        boxShadow: "0px 4px 10px rgba(0,0,0,0.1)",
+    },
+    header: {
+        backgroundColor: "#007bff",
+        color: "white",
+        padding: "10px",
+        fontSize: "16px",
+        borderRadius: "5px",
+        marginBottom: "10px",
+        textAlign: "center",
+    },
+    headerText: {
+        fontSize: "16px",
+        fontWeight: "bold",
+    },
+    usernameContainer: {
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: "10px",
+        marginBottom: "15px",
+    },
+    chatBox: {
+        height: "300px",
+        overflowY: "auto",
+        backgroundColor: "#fff",
+        padding: "10px",
+        borderRadius: "8px",
+        boxShadow: "inset 0px 2px 5px rgba(0,0,0,0.1)",
+    },
+    myMessage: {
+        backgroundColor: "#dcf8c6",
+        padding: "10px",
+        borderRadius: "10px",
+        textAlign: "right",
+        marginBottom: "5px",
+        width: "fit-content",
+        alignSelf: "flex-end",
+        maxWidth: "80%",
+        marginLeft: "auto",
+    },
+    otherMessage: {
+        backgroundColor: "#e6e6e6",
+        padding: "10px",
+        borderRadius: "10px",
+        textAlign: "left",
+        marginBottom: "5px",
+        width: "fit-content",
+        alignSelf: "flex-start",
+        maxWidth: "80%",
+    },
+    systemMessage: {
+        textAlign: "center",
+        color: "#666",
+        fontStyle: "italic",
+        fontSize: "14px",
+        margin: "10px 0",
+    },
+    timestamp: {
+        fontSize: "10px",
+        marginLeft: "10px",
+        color: "#555",
+    },
+    inputContainer: {
+        display: "flex",
+        marginTop: "10px",
+        backgroundColor: "#fff",
+        borderRadius: "8px",
+        padding: "5px",
+    },
+    input: {
+        flex: 1,
+        padding: "10px",
+        border: "1px solid #ccc",
+        borderRadius: "5px",
+        outline: "none",
+    },
+    sendButton: {
+        backgroundColor: "#007bff",
+        color: "#fff",
+        border: "none",
+        padding: "10px",
+        borderRadius: "5px",
+        marginLeft: "5px",
+        cursor: "pointer",
+    },
+    joinButton: {
+        backgroundColor: "#28a745",
+        color: "#fff",
+        border: "none",
+        padding: "10px",
+        borderRadius: "5px",
+        cursor: "pointer",
+    },
+    typingIndicator: {
+        fontSize: "12px",
+        color: "#666",
+        margin: "10px 0",
+    },
 };
 
 export default Chat;
