@@ -211,3 +211,5 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: "pointer",
     },
 };
+
+export default Chat;
