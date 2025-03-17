@@ -20,7 +20,7 @@ async function startRedis() {
 
         // ✅ FIX: Subscribe with a callback function
         await sub.subscribe("chat", (message, channel) => {
-            console.log(`📢 Broadcasting message from Redis: ${message}`);
+            console.log('📢 Broadcasting message from Redis: ${message}');
             wss.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
                     client.send(message);
@@ -52,5 +52,5 @@ wss.on("connection", (ws) => {
 // Start the server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log('🚀 Server running on port ${PORT}');
 });
