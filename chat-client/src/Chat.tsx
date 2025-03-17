@@ -4,10 +4,10 @@ import useWebSocket from "react-use-websocket";
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
 interface ChatMessage {
-    sender?: string;  // Sender name (undefined if system message)
-    text: string;     // Message content
-    time: string;     // Timestamp
-    type?: "join" | "message"; // ✅ New: Message type (join message or normal chat)
+    sender: string;
+    text: string;
+    time: string;
+    type?: string;
 }
 
 const Chat: React.FC = () => {
@@ -15,19 +15,29 @@ const Chat: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [username, setUsername] = useState("");
-    const [isUsernameSet, setIsUsernameSet] = useState(false);
+    const [activeUsers, setActiveUsers] = useState<string[]>([]);
+    const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-            // Prevent duplicates
-            if (!messages.some(msg => msg.text === receivedData.text && msg.sender === receivedData.sender)) {
+            if (receivedData.type === "join") {
+                if (!activeUsers.includes(receivedData.sender)) {
+                    setActiveUsers((prev) => [...prev, receivedData.sender]);
+                    setMessages((prev) => [...prev, { ...receivedData, text: `${receivedData.sender} joined the chat`, type: "system" }]);
+                }
+            } else if (receivedData.type === "typing") {
+                if (receivedData.sender !== username) {
+                    setIsTyping(true);
+                    setTimeout(() => setIsTyping(false), 2000);
+                }
+            } else {
                 setMessages((prev) => [...prev, receivedData]);
             }
         }
-    }, [lastMessage]);
+    }, [lastMessage, username, activeUsers]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,24 +46,14 @@ const Chat: React.FC = () => {
     const handleJoinChat = () => {
         if (input.trim() !== "") {
             setUsername(input);
-            setInput(""); // ✅ Clear input after setting username
-            setIsUsernameSet(true);
-
-            // ✅ Notify others that a new user has joined
-            const joinMessage: ChatMessage = {
-                text: `${input} joined the chat`,
-                time: new Date().toLocaleTimeString(),
-                type: "join", // ✅ New type to differentiate
-            };
-            sendMessage(JSON.stringify(joinMessage));
-            setMessages((prev) => [...prev, joinMessage]);
+            sendMessage(JSON.stringify({ sender: input, type: "join" }));
         }
     };
 
     const handleSend = () => {
         if (input.trim() === "" || username.trim() === "") return;
         
-        const messageData: ChatMessage = {
+        const messageData = {
             sender: username,
             text: input,
             time: new Date().toLocaleTimeString(),
@@ -61,23 +61,21 @@ const Chat: React.FC = () => {
         };
 
         sendMessage(JSON.stringify(messageData));
-
         setMessages([...messages, messageData]);
         setInput("");
+    };
+
+    const handleTyping = () => {
+        sendMessage(JSON.stringify({ sender: username, type: "typing" }));
     };
 
     return (
         <div style={styles.container}>
             <h2 style={styles.title}>💬 Real-Time Chat</h2>
 
-            {/* ✅ New Header: "You joined as {username}" */}
-            {isUsernameSet && (
-                <div style={styles.userHeader}>
-                    <b>You joined as:</b> {username}
-                </div>
-            )}
+            {username && <div style={styles.userHeader}>You joined as <b>{username}</b></div>}
 
-            {!isUsernameSet ? (
+            {!username ? (
                 <div style={styles.usernameContainer}>
                     <input
                         type="text"
@@ -86,28 +84,19 @@ const Chat: React.FC = () => {
                         onChange={(e) => setInput(e.target.value)}
                         style={styles.input}
                     />
-                    <button onClick={handleJoinChat} style={styles.sendButton}>
-                        Join Chat
-                    </button>
+                    <button onClick={handleJoinChat} style={styles.sendButton}>Join Chat</button>
                 </div>
             ) : (
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            msg.type === "join" ? (
-                                // ✅ Display a system message when someone joins
-                                <div key={i} style={styles.joinMessage}>
-                                    {msg.text}
-                                    <small style={styles.timestamp}>{msg.time}</small>
-                                </div>
-                            ) : (
-                                <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
-                                    <strong>{msg.sender}</strong>: <span>{msg.text}</span>
-                                    <small style={styles.timestamp}>{msg.time}</small>
-                                </div>
-                            )
+                            <div key={i} style={msg.type === "system" ? styles.systemMessage : (msg.sender === username ? styles.myMessage : styles.otherMessage)}>
+                                {msg.type !== "system" && <strong>{msg.sender}: </strong>} <span>{msg.text}</span>
+                                <small style={styles.timestamp}>{msg.time}</small>
+                            </div>
                         ))}
                         <div ref={messagesEndRef} />
+                        {isTyping && <p style={styles.typingIndicator}>Someone is typing...</p>}
                     </div>
 
                     <div style={styles.inputContainer}>
@@ -115,7 +104,10 @@ const Chat: React.FC = () => {
                             type="text"
                             placeholder="Type a message..."
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={(e) => {
+                                setInput(e.target.value);
+                                handleTyping();
+                            }}
                             onKeyDown={(e) => e.key === "Enter" && handleSend()}
                             style={styles.input}
                         />
@@ -132,7 +124,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: "50%",
         margin: "auto",
         fontFamily: "Arial, sans-serif",
-        textAlign: "center" as "center",
+        textAlign: "center",
         backgroundColor: "#f4f4f4",
         padding: "20px",
         borderRadius: "10px",
@@ -141,15 +133,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     title: {
         color: "#333",
     },
-    userHeader: {
-        backgroundColor: "#d1e7fd",
-        padding: "8px",
-        borderRadius: "5px",
-        fontSize: "14px",
+    usernameHeader: {
+        fontSize: "16px",
         fontWeight: "bold",
+        padding: "10px",
+        backgroundColor: "#e6e6e6",
+        borderRadius: "5px",
         marginBottom: "10px",
+        display: "inline-block",
     },
-    usernameContainer: {
+    usernameContainer: { // ✅ Added missing style
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
@@ -168,7 +161,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#dcf8c6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "right" as "right",
+        textAlign: "right",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-end",
@@ -179,20 +172,18 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#e6e6e6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "left" as "left",
+        textAlign: "left",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-start",
         maxWidth: "80%",
     },
-    joinMessage: {
-        textAlign: "center" as "center",
+    systemMessage: { // ✅ Added for "User joined" notifications
+        textAlign: "center",
+        color: "#666",
         fontStyle: "italic",
-        color: "#555",
-        padding: "5px",
-        backgroundColor: "#f8f8f8",
-        borderRadius: "5px",
-        margin: "5px 0",
+        fontSize: "14px",
+        margin: "10px 0",
     },
     timestamp: {
         fontSize: "10px",
@@ -220,5 +211,3 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: "pointer",
     },
 };
-
-export default Chat;
