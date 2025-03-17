@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
-import { FaMicrophone, FaPaperPlane } from "react-icons/fa";
+import { FaMicrophone, FaPaperPlane } from "react-icons/fa6";
 
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
@@ -25,11 +25,18 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (lastMessage !== null) {
       const receivedData: ChatMessage = JSON.parse(lastMessage.data);
-      if (receivedData.sender !== username && receivedData.text) {
+      
+      // Prevent duplicate join messages
+      if (receivedData.type === "join" && !messages.some(msg => msg.sender === receivedData.sender && msg.type === "join")) {
+        setMessages((prev) => [...prev, receivedData]);
+      }
+      
+      // Prevent empty messages
+      else if (receivedData.text || receivedData.audioUrl) {
         setMessages((prev) => [...prev, receivedData]);
       }
     }
-  }, [lastMessage, username]);
+  }, [lastMessage]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,6 +46,7 @@ const Chat: React.FC = () => {
     if (input.trim() !== "") {
       setUsername(input);
       sendMessage(JSON.stringify({ sender: input, text: `${input} joined the chat`, type: "join", time: new Date().toLocaleTimeString() }));
+      setInput(""); // Clear input after setting username
     }
   };
 
@@ -53,7 +61,7 @@ const Chat: React.FC = () => {
     };
 
     sendMessage(JSON.stringify(messageData));
-    setMessages([...messages, messageData]);
+    setMessages((prev) => [...prev, messageData]);
     setInput("");
   };
 
@@ -71,26 +79,32 @@ const Chat: React.FC = () => {
 
   const stopRecording = () => {
     if (!mediaRecorder) return;
+    
     mediaRecorder.stop();
     setIsRecording(false);
+    
     mediaRecorder.onstop = () => {
       const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
       const audioUrl = URL.createObjectURL(audioBlob);
+      
       const audioMessage = {
         sender: username,
         audioUrl,
         time: new Date().toLocaleTimeString(),
         type: "audio",
       };
+
       sendMessage(JSON.stringify(audioMessage));
-      setMessages([...messages, audioMessage]);
-      setAudioChunks([]);
+      
+      setMessages((prev) => [...prev, audioMessage]);
+      setAudioChunks([]); // ✅ Clear chunks after sending
     };
   };
 
   return (
     <div className="h-screen flex flex-col items-center bg-gray-100 p-4">
       <h2 className="text-2xl font-bold mb-2">💬 Real-Time Chat</h2>
+      
       {username && <div className="bg-blue-500 text-white px-4 py-2 rounded mb-2">You joined as <b>{username}</b></div>}
       
       {!username ? (
