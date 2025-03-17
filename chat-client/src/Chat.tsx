@@ -4,6 +4,7 @@ import useWebSocket from "react-use-websocket";
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
 interface ChatMessage {
+    id: string; // Unique message ID
     sender: string;
     text: string;
     time: string;
@@ -17,16 +18,20 @@ const Chat: React.FC = () => {
     const [showPopup, setShowPopup] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+    // ✅ Prevent duplicate messages
     useEffect(() => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-            if (receivedData.sender === username) return;
-
-            setMessages((prev) => [...prev, receivedData]);
+            // Avoid adding the same message multiple times
+            setMessages((prev) => {
+                if (prev.some((msg) => msg.id === receivedData.id)) return prev;
+                return [...prev, receivedData];
+            });
         }
-    }, [lastMessage, username]);
+    }, [lastMessage]);
 
+    // ✅ Auto-scroll to latest message
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
@@ -34,26 +39,26 @@ const Chat: React.FC = () => {
     const handleJoinChat = () => {
         if (input.trim() !== "") {
             setUsername(input);
-            setShowPopup(true); // ✅ Show popup when user joins
+            setShowPopup(true);
 
             setTimeout(() => {
-                setShowPopup(false); // ✅ Hide popup after 3 seconds
+                setShowPopup(false);
             }, 3000);
         }
     };
 
     const handleSend = () => {
         if (input.trim() === "" || username.trim() === "") return;
-        
+
         const messageData = {
+            id: Date.now().toString(), // Unique ID for each message
             sender: username,
             text: input,
             time: new Date().toLocaleTimeString(),
         };
 
         sendMessage(JSON.stringify(messageData));
-
-        setMessages([...messages, messageData]);
+        setMessages((prev) => [...prev, messageData]); // Add message only once
         setInput("");
     };
 
@@ -61,14 +66,14 @@ const Chat: React.FC = () => {
         <div style={styles.container}>
             <h2 style={styles.title}>💬 Real-Time Chat</h2>
 
-            {/* ✅ Show Popup When User Joins */}
+            {/* ✅ Show popup when user joins */}
             {showPopup && <div style={styles.popup}>✅ Joined as <b>{username}</b></div>}
 
             {!username ? (
                 <div style={styles.usernameContainer}>
                     <input
                         type="text"
-                        placeholder="Enter your full name..."
+                        placeholder="Enter your name..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         style={styles.input}
@@ -81,8 +86,10 @@ const Chat: React.FC = () => {
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
-                                <strong>{msg.sender}: </strong> <span>{msg.text}</span>
+                            <div key={msg.id} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
+                                {/* ✅ Show sender's name only for other users */}
+                                {msg.sender !== username && <strong>{msg.sender}: </strong>}
+                                <span>{msg.text}</span>
                                 <small style={styles.timestamp}>{msg.time}</small>
                             </div>
                         ))}
@@ -111,7 +118,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: "50%",
         margin: "auto",
         fontFamily: "Arial, sans-serif",
-        textAlign: "center" as "center",
+        textAlign: "center",
         backgroundColor: "#f4f4f4",
         padding: "20px",
         borderRadius: "10px",
@@ -151,7 +158,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#dcf8c6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "right" as "right",
+        textAlign: "right",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-end",
@@ -162,7 +169,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#e6e6e6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "left" as "left",
+        textAlign: "left",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-start",
