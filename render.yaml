@@ -8,5 +8,3 @@ services:
     envVars:
       - key: PORT
         value: 10000
-      - key: REDIS_URL
-        value: redis://default:GhJqoSPqrbjFyDlrGPBCYuWLtwTQIzNx@interchange.proxy.rlwy.net:44899
