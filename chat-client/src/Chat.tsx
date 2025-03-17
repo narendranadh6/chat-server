@@ -4,9 +4,10 @@ import useWebSocket from "react-use-websocket";
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
 interface ChatMessage {
-    sender: string;
-    text: string;
-    time: string;
+    sender?: string;  // Sender name (undefined if system message)
+    text: string;     // Message content
+    time: string;     // Timestamp
+    type?: "join" | "message"; // ✅ New: Message type (join message or normal chat)
 }
 
 const Chat: React.FC = () => {
@@ -21,7 +22,7 @@ const Chat: React.FC = () => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-            // Prevent duplicates & Ignore messages sent by the same user
+            // Prevent duplicates
             if (!messages.some(msg => msg.text === receivedData.text && msg.sender === receivedData.sender)) {
                 setMessages((prev) => [...prev, receivedData]);
             }
@@ -37,16 +38,26 @@ const Chat: React.FC = () => {
             setUsername(input);
             setInput(""); // ✅ Clear input after setting username
             setIsUsernameSet(true);
+
+            // ✅ Notify others that a new user has joined
+            const joinMessage: ChatMessage = {
+                text: `${input} joined the chat`,
+                time: new Date().toLocaleTimeString(),
+                type: "join", // ✅ New type to differentiate
+            };
+            sendMessage(JSON.stringify(joinMessage));
+            setMessages((prev) => [...prev, joinMessage]);
         }
     };
 
     const handleSend = () => {
         if (input.trim() === "" || username.trim() === "") return;
         
-        const messageData = {
+        const messageData: ChatMessage = {
             sender: username,
             text: input,
             time: new Date().toLocaleTimeString(),
+            type: "message",
         };
 
         sendMessage(JSON.stringify(messageData));
@@ -83,10 +94,18 @@ const Chat: React.FC = () => {
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
-                                <strong>{msg.sender}</strong>: <span>{msg.text}</span>
-                                <small style={styles.timestamp}>{msg.time}</small>
-                            </div>
+                            msg.type === "join" ? (
+                                // ✅ Display a system message when someone joins
+                                <div key={i} style={styles.joinMessage}>
+                                    {msg.text}
+                                    <small style={styles.timestamp}>{msg.time}</small>
+                                </div>
+                            ) : (
+                                <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
+                                    <strong>{msg.sender}</strong>: <span>{msg.text}</span>
+                                    <small style={styles.timestamp}>{msg.time}</small>
+                                </div>
+                            )
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
@@ -165,6 +184,15 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: "fit-content",
         alignSelf: "flex-start",
         maxWidth: "80%",
+    },
+    joinMessage: {
+        textAlign: "center" as "center",
+        fontStyle: "italic",
+        color: "#555",
+        padding: "5px",
+        backgroundColor: "#f8f8f8",
+        borderRadius: "5px",
+        margin: "5px 0",
     },
     timestamp: {
         fontSize: "10px",
