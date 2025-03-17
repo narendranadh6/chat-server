@@ -46,14 +46,31 @@ wss.on("connection", (ws) => {
     console.log("🔗 New client connected");
 
     ws.on("message", async (message) => {
-        console.log(`📩 Received message: ${message}`);
-        await pub.publish("chat", message.toString()); // Publishes to Redis
+        try {
+            const parsedMessage = JSON.parse(message);
+            console.log(`📩 Received message from ${parsedMessage.sender}: ${parsedMessage.text}`);
+
+            await pub.publish("chat", message); // Publishes JSON message
+
+        } catch (error) {
+            console.error("❌ Error parsing message:", error);
+        }
     });
 
     ws.on("close", () => {
         console.log("❌ Client disconnected");
     });
 });
+
+// Broadcast messages properly
+sub.subscribe("chat", (message) => {
+    wss.clients.forEach(client => {
+        if (client.readyState === 1) { // WebSocket.OPEN === 1
+            client.send(message); // Send the full JSON object
+        }
+    });
+});
+
 
 // Start the server
 const PORT = process.env.PORT || 3000;
