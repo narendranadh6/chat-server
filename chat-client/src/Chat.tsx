@@ -23,21 +23,28 @@ const Chat: React.FC = () => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
+            setMessages((prevMessages) => {
+                // Prevent duplicate messages
+                const isDuplicate = prevMessages.some(
+                    (msg) => msg.text === receivedData.text &&
+                             msg.sender === receivedData.sender &&
+                             msg.time === receivedData.time
+                );
+                return isDuplicate ? prevMessages : [...prevMessages, receivedData];
+            });
+
             if (receivedData.type === "join") {
-                if (!activeUsers.includes(receivedData.sender)) {
-                    setActiveUsers((prev) => [...prev, receivedData.sender]);
-                    setMessages((prev) => [...prev, { ...receivedData, text: `${receivedData.sender} joined the chat`, type: "system" }]);
-                }
-            } else if (receivedData.type === "typing") {
-                if (receivedData.sender !== username) {
-                    setIsTyping(true);
-                    setTimeout(() => setIsTyping(false), 2000);
-                }
-            } else {
-                setMessages((prev) => [...prev, receivedData]);
+                setActiveUsers((prevUsers) => 
+                    prevUsers.includes(receivedData.sender) ? prevUsers : [...prevUsers, receivedData.sender]
+                );
+            }
+
+            if (receivedData.type === "typing" && receivedData.sender !== username) {
+                setIsTyping(true);
+                setTimeout(() => setIsTyping(false), 2000);
             }
         }
-    }, [lastMessage, username, activeUsers]);
+    }, [lastMessage, username]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,6 +54,7 @@ const Chat: React.FC = () => {
         if (input.trim() !== "") {
             setUsername(input);
             sendMessage(JSON.stringify({ sender: input, type: "join" }));
+            setInput("");  // ✅ Clear input after setting username
         }
     };
 
@@ -62,7 +70,7 @@ const Chat: React.FC = () => {
 
         sendMessage(JSON.stringify(messageData));
         setMessages([...messages, messageData]);
-        setInput("");
+        setInput("");  // ✅ Clear input after sending
     };
 
     const handleTyping = () => {
@@ -90,7 +98,10 @@ const Chat: React.FC = () => {
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div key={i} style={msg.type === "system" ? styles.systemMessage : (msg.sender === username ? styles.myMessage : styles.otherMessage)}>
+                            <div 
+                                key={i} 
+                                style={msg.type === "system" ? styles.systemMessage : (msg.sender === username ? styles.myMessage : styles.otherMessage)}
+                            >
                                 {msg.type !== "system" && <strong>{msg.sender}: </strong>} <span>{msg.text}</span>
                                 <small style={styles.timestamp}>{msg.time}</small>
                             </div>
@@ -133,7 +144,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     title: {
         color: "#333",
     },
-    usernameHeader: {
+    userHeader: {
         fontSize: "16px",
         fontWeight: "bold",
         padding: "10px",
@@ -209,6 +220,12 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: "5px",
         marginLeft: "5px",
         cursor: "pointer",
+    },
+    typingIndicator: {
+        fontStyle: "italic",
+        color: "#666",
+        fontSize: "12px",
+        marginTop: "5px",
     },
 };
 
