@@ -4,7 +4,6 @@ import useWebSocket from "react-use-websocket";
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
 interface ChatMessage {
-    id: string; // Unique message ID
     sender: string;
     text: string;
     time: string;
@@ -15,23 +14,20 @@ const Chat: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [username, setUsername] = useState("");
-    const [showPopup, setShowPopup] = useState(false);
+    const [isUsernameSet, setIsUsernameSet] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-    // ✅ Prevent duplicate messages
     useEffect(() => {
         if (lastMessage !== null) {
             const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-            // Avoid adding the same message multiple times
-            setMessages((prev) => {
-                if (prev.some((msg) => msg.id === receivedData.id)) return prev;
-                return [...prev, receivedData];
-            });
+            // Prevent duplicates & Ignore messages sent by the same user
+            if (!messages.some(msg => msg.text === receivedData.text && msg.sender === receivedData.sender)) {
+                setMessages((prev) => [...prev, receivedData]);
+            }
         }
     }, [lastMessage]);
 
-    // ✅ Auto-scroll to latest message
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
@@ -39,26 +35,23 @@ const Chat: React.FC = () => {
     const handleJoinChat = () => {
         if (input.trim() !== "") {
             setUsername(input);
-            setShowPopup(true);
-
-            setTimeout(() => {
-                setShowPopup(false);
-            }, 3000);
+            setInput(""); // ✅ Clear input after setting username
+            setIsUsernameSet(true);
         }
     };
 
     const handleSend = () => {
         if (input.trim() === "" || username.trim() === "") return;
-
+        
         const messageData = {
-            id: Date.now().toString(), // Unique ID for each message
             sender: username,
             text: input,
             time: new Date().toLocaleTimeString(),
         };
 
         sendMessage(JSON.stringify(messageData));
-        setMessages((prev) => [...prev, messageData]); // Add message only once
+
+        setMessages([...messages, messageData]);
         setInput("");
     };
 
@@ -66,10 +59,14 @@ const Chat: React.FC = () => {
         <div style={styles.container}>
             <h2 style={styles.title}>💬 Real-Time Chat</h2>
 
-            {/* ✅ Show popup when user joins */}
-            {showPopup && <div style={styles.popup}>✅ Joined as <b>{username}</b></div>}
+            {/* ✅ New Header: "You joined as {username}" */}
+            {isUsernameSet && (
+                <div style={styles.userHeader}>
+                    <b>You joined as:</b> {username}
+                </div>
+            )}
 
-            {!username ? (
+            {!isUsernameSet ? (
                 <div style={styles.usernameContainer}>
                     <input
                         type="text"
@@ -86,10 +83,8 @@ const Chat: React.FC = () => {
                 <>
                     <div style={styles.chatBox}>
                         {messages.map((msg, i) => (
-                            <div key={msg.id} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
-                                {/* ✅ Show sender's name only for other users */}
-                                {msg.sender !== username && <strong>{msg.sender}: </strong>}
-                                <span>{msg.text}</span>
+                            <div key={i} style={msg.sender === username ? styles.myMessage : styles.otherMessage}>
+                                <strong>{msg.sender}</strong>: <span>{msg.text}</span>
                                 <small style={styles.timestamp}>{msg.time}</small>
                             </div>
                         ))}
@@ -118,7 +113,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: "50%",
         margin: "auto",
         fontFamily: "Arial, sans-serif",
-        textAlign: "center",
+        textAlign: "center" as "center",
         backgroundColor: "#f4f4f4",
         padding: "20px",
         borderRadius: "10px",
@@ -127,17 +122,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     title: {
         color: "#333",
     },
-    popup: {
-        position: "absolute",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        backgroundColor: "#4CAF50",
-        color: "white",
-        padding: "10px 20px",
+    userHeader: {
+        backgroundColor: "#d1e7fd",
+        padding: "8px",
         borderRadius: "5px",
+        fontSize: "14px",
         fontWeight: "bold",
-        boxShadow: "0px 2px 5px rgba(0,0,0,0.3)",
+        marginBottom: "10px",
     },
     usernameContainer: {
         display: "flex",
@@ -158,7 +149,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#dcf8c6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "right",
+        textAlign: "right" as "right",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-end",
@@ -169,7 +160,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: "#e6e6e6",
         padding: "8px",
         borderRadius: "10px",
-        textAlign: "left",
+        textAlign: "left" as "left",
         marginBottom: "5px",
         width: "fit-content",
         alignSelf: "flex-start",
