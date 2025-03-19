@@ -30,38 +30,42 @@ const Chat: React.FC = () => {
     if (lastMessage !== null) {
       const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-      // Handle system messages (join notifications)
-      if (receivedData.type === "join") {
-        if (!messages.some(msg => msg.sender === receivedData.sender && msg.type === "join")) {
-          setMessages(prev => [...prev, receivedData]);
-        }
-      } 
-      // Handle typing indicator
-      else if (receivedData.type === "typing" && receivedData.sender !== username) {
+      setMessages((prev) => {
+        const exists = prev.some(
+          (msg) =>
+            msg.sender === receivedData.sender &&
+            msg.text === receivedData.text &&
+            msg.time === receivedData.time
+        );
+        return exists ? prev : [...prev, receivedData];
+      });
+
+      if (receivedData.type === "typing" && receivedData.sender !== username) {
         setIsTyping(true);
         setTimeout(() => setIsTyping(false), 2000);
-      } 
-      // Handle text/audio/file messages
-      else if (receivedData.text || receivedData.audioUrl || receivedData.fileUrl) {
-        setMessages(prev => [...prev, receivedData]);
       }
     }
-  }, [lastMessage, messages, username]);
+  }, [lastMessage, username]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Join the chat
   const handleJoinChat = () => {
     if (input.trim() !== "") {
       setUsername(input);
-      sendMessage(JSON.stringify({ sender: input, text: `${input} joined the chat`, type: "join", time: new Date().toLocaleTimeString() }));
+      sendMessage(
+        JSON.stringify({
+          sender: input,
+          text: `${input} joined the chat`,
+          type: "join",
+          time: new Date().toLocaleTimeString(),
+        })
+      );
       setInput("");
     }
   };
 
-  // Send text message
   const handleSend = () => {
     if (input.trim() === "" || username.trim() === "") return;
 
@@ -73,16 +77,13 @@ const Chat: React.FC = () => {
     };
 
     sendMessage(JSON.stringify(messageData));
-    setMessages(prev => [...prev, messageData]);
     setInput("");
   };
 
-  // Typing indicator
   const handleTyping = () => {
     sendMessage(JSON.stringify({ sender: username, type: "typing" }));
   };
 
-  // Start voice recording
   const startRecording = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const recorder = new MediaRecorder(stream);
@@ -91,14 +92,12 @@ const Chat: React.FC = () => {
     setIsRecording(true);
 
     recorder.ondataavailable = (event) => {
-      setAudioChunks(prev => [...prev, event.data]);
+      setAudioChunks((prev) => [...prev, event.data]);
     };
   };
 
-  // Stop voice recording and send audio message
   const stopRecording = () => {
     if (!mediaRecorder) return;
-
     mediaRecorder.stop();
     setIsRecording(false);
 
@@ -114,12 +113,11 @@ const Chat: React.FC = () => {
       };
 
       sendMessage(JSON.stringify(audioMessage));
-      setMessages(prev => [...prev, audioMessage]);
+      setMessages((prev) => [...prev, audioMessage]);
       setAudioChunks([]);
     };
   };
 
-  // Send a file
   const handleFileSend = async () => {
     if (!file) return;
     const fileUrl = URL.createObjectURL(file);
@@ -133,7 +131,7 @@ const Chat: React.FC = () => {
     };
 
     sendMessage(JSON.stringify(fileMessage));
-    setMessages(prev => [...prev, fileMessage]);
+    setMessages((prev) => [...prev, fileMessage]);
     setFile(null);
   };
 
@@ -141,7 +139,11 @@ const Chat: React.FC = () => {
     <div className="h-screen flex flex-col items-center bg-gray-100 p-4">
       <h2 className="text-2xl font-bold mb-2">💬 Real-Time Chat</h2>
 
-      {username && <div className="bg-blue-500 text-white px-4 py-2 rounded mb-2">You joined as <b>{username}</b></div>}
+      {username && (
+        <div className="bg-blue-500 text-white px-4 py-2 rounded mb-2">
+          You joined as <b>{username}</b>
+        </div>
+      )}
 
       {!username ? (
         <div className="flex gap-2 mb-4">
@@ -152,13 +154,20 @@ const Chat: React.FC = () => {
             onChange={(e) => setInput(e.target.value)}
             className="border p-2 rounded"
           />
-          <button onClick={handleJoinChat} className="bg-blue-500 text-white px-4 py-2 rounded">Join</button>
+          <button onClick={handleJoinChat} className="bg-blue-500 text-white px-4 py-2 rounded">
+            Join
+          </button>
         </div>
       ) : (
         <>
           <div className="w-full max-w-2xl bg-white p-4 rounded-lg shadow-md h-96 overflow-y-auto">
             {messages.map((msg, i) => (
-              <div key={i} className={`p-2 my-1 rounded-lg max-w-xs ${msg.sender === username ? "bg-green-200 ml-auto" : "bg-gray-200"}`}>
+              <div
+                key={i}
+                className={`p-2 my-1 rounded-lg max-w-xs ${
+                  msg.sender === username ? "bg-green-200 ml-auto" : "bg-gray-200"
+                }`}
+              >
                 {msg.type === "join" ? (
                   <div className="text-center text-gray-500 italic">{msg.text}</div>
                 ) : (
@@ -166,7 +175,11 @@ const Chat: React.FC = () => {
                     <strong>{msg.sender}: </strong>
                     {msg.text && <span>{msg.text}</span>}
                     {msg.audioUrl && <audio controls src={msg.audioUrl} className="mt-1" />}
-                    {msg.fileUrl && <a href={msg.fileUrl} download={msg.fileName} className="text-blue-500">{msg.fileName}</a>}
+                    {msg.fileUrl && (
+                      <a href={msg.fileUrl} download={msg.fileName} className="text-blue-500">
+                        {msg.fileName}
+                      </a>
+                    )}
                   </>
                 )}
                 <small className="block text-xs text-right">{msg.time}</small>
@@ -188,10 +201,16 @@ const Chat: React.FC = () => {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               className="border p-2 rounded flex-1"
             />
-            <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded"><FaPaperPlane /></button>
-            <button onClick={startRecording} className="bg-gray-500 text-white p-2 rounded"><FaMicrophone /></button>
+            <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded">
+              <FaPaperPlane />
+            </button>
+            <button onClick={startRecording} className="bg-gray-500 text-white p-2 rounded">
+              <FaMicrophone />
+            </button>
             <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            <button onClick={handleFileSend} className="bg-green-500 text-white p-2 rounded"><FaFile /></button>
+            <button onClick={handleFileSend} className="bg-green-500 text-white p-2 rounded">
+              <FaFile />
+            </button>
           </div>
         </>
       )}
