@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
-import { FaPaperPlane, FaMicrophone, FaFileAlt } from "react-icons/fa6";
+import { FaPaperPlane, FaMicrophone, FaFile } from "react-icons/fa6";
 
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
@@ -191,7 +191,7 @@ const Chat: React.FC = () => {
             <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded"><FaPaperPlane /></button>
             <button onClick={startRecording} className="bg-gray-500 text-white p-2 rounded"><FaMicrophone /></button>
             <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            <button onClick={handleFileSend} className="bg-green-500 text-white p-2 rounded"><FaFileAlt /></button>
+            <button onClick={handleFileSend} className="bg-green-500 text-white p-2 rounded"><FaFile /></button>
           </div>
         </>
       )}
