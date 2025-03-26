@@ -138,4 +138,16 @@
     gap: 0.5rem;
     margin-top: 1rem;
   }
+
+  .join-message {
+    text-align: center;
+    font-style: italic;
+    color: #555;
+    background-color: #f0f0f0;
+    margin: 10px auto;
+    padding: 5px 10px;
+    border-radius: 8px;
+    max-width: 60%;
+  }
+  
   

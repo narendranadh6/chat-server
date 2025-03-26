@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
-import { FaPaperPlane, FaMicrophone, FaFile, FaUser, FaUsers, FaMoon, FaSun } from "react-icons/fa6";
-import "./Chat.css"; // ✅ Add a CSS file for better styling
+import { FaPaperPlane, FaMicrophone, FaUser, FaUsers, FaMoon, FaSun, FaFile } from "react-icons/fa6";
+import "./Chat.css";
 
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
 
@@ -33,20 +33,21 @@ const Chat: React.FC = () => {
     if (lastMessage !== null) {
       const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-      // Prevent duplicate messages
-      setMessages((prev) => {
-        const exists = prev.some(
-          (msg) =>
-            msg.sender === receivedData.sender &&
-            msg.text === receivedData.text &&
-            msg.time === receivedData.time
-        );
-        return exists ? prev : [...prev, receivedData];
-      });
+      if (receivedData.sender === username && receivedData.type === "message") return;
 
-      // Add user to online users list
       if (receivedData.type === "join") {
-        setOnlineUsers((prev) => [...new Set([...prev, receivedData.sender])]);
+        const isAlreadyJoined = messages.some(
+          (msg) => msg.sender === receivedData.sender && msg.type === "join"
+        );
+        if (!isAlreadyJoined) {
+          setMessages((prev) => [...prev, receivedData]);
+          setOnlineUsers((prev) => Array.from(new Set([...prev, receivedData.sender])));
+        }
+        return;
+      }
+
+      if (receivedData.text?.trim() || receivedData.audioUrl || receivedData.fileUrl) {
+        setMessages((prev) => [...prev, receivedData]);
       }
 
       if (receivedData.type === "typing" && receivedData.sender !== username) {
@@ -54,7 +55,7 @@ const Chat: React.FC = () => {
         setTimeout(() => setIsTyping(false), 2000);
       }
     }
-  }, [lastMessage, username]);
+  }, [lastMessage, messages, username]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,6 +80,7 @@ const Chat: React.FC = () => {
     };
 
     sendMessage(JSON.stringify(messageData));
+    setMessages((prev) => [...prev, messageData]);
     setInput("");
   };
 
@@ -120,6 +122,23 @@ const Chat: React.FC = () => {
     };
   };
 
+  const handleFileSend = () => {
+    if (!file) return;
+    const fileUrl = URL.createObjectURL(file);
+
+    const fileMessage = {
+      sender: username,
+      fileUrl,
+      fileName: file.name,
+      time: new Date().toLocaleTimeString(),
+      type: "file",
+    };
+
+    sendMessage(JSON.stringify(fileMessage));
+    setMessages((prev) => [...prev, fileMessage]);
+    setFile(null);
+  };
+
   return (
     <div className={`chat-container ${darkMode ? "dark" : ""}`}>
       <div className="chat-header">
@@ -150,12 +169,19 @@ const Chat: React.FC = () => {
         <>
           <div className="chat-box">
             {messages.map((msg, i) => (
-              <div key={i} className={`message ${msg.sender === username ? "sent" : "received"}`}>
-                <strong>{msg.sender}: </strong>
-                {msg.text && <span>{msg.text}</span>}
-                {msg.audioUrl && <audio controls src={msg.audioUrl} />}
-                <small>{msg.time}</small>
-              </div>
+              msg.type === "join" ? (
+                <div key={i} className="join-message">
+                  <em style={{ textAlign: "center", display: "block", color: darkMode ? "#bbb" : "#555" }}>{msg.text}</em>
+                </div>
+              ) : (
+                <div key={i} className={`message ${msg.sender === username ? "sent" : "received"}`}>
+                  <strong style={{ color: darkMode ? "#eee" : "#000" }}>{msg.sender}: </strong>
+                  {msg.text && <span style={{ color: darkMode ? "#fff" : "#000" }}>{msg.text}</span>}
+                  {msg.audioUrl && <audio controls src={msg.audioUrl} />}
+                  {msg.fileUrl && <a href={msg.fileUrl} download={msg.fileName} className="file-link">📎 {msg.fileName}</a>}
+                  <small style={{ color: darkMode ? "#aaa" : "#555" }}>{msg.time}</small>
+                </div>
+              )
             ))}
             <div ref={messagesEndRef} />
             {isTyping && <p className="typing-indicator">Someone is typing...</p>}
@@ -173,6 +199,8 @@ const Chat: React.FC = () => {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               className="chat-input"
             />
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <button onClick={handleFileSend} className="send-btn"><FaFile /></button>
             <button onClick={handleSend} className="send-btn"><FaPaperPlane /></button>
             <button onClick={startRecording} className="record-btn"><FaMicrophone /></button>
           </div>
