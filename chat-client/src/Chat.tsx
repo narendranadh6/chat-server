@@ -13,6 +13,7 @@ interface ChatMessage {
   audioUrl?: string;
   fileUrl?: string;
   fileName?: string;
+  fileType?: string;
 }
 
 const Chat: React.FC = () => {
@@ -33,26 +34,31 @@ const Chat: React.FC = () => {
     if (lastMessage !== null) {
       const receivedData: ChatMessage = JSON.parse(lastMessage.data);
 
-      if (receivedData.sender === username && receivedData.type === "message") return;
-
       if (receivedData.type === "join") {
-        const isAlreadyJoined = messages.some(
+        const exists = messages.some(
           (msg) => msg.sender === receivedData.sender && msg.type === "join"
         );
-        if (!isAlreadyJoined) {
+        if (!exists) {
           setMessages((prev) => [...prev, receivedData]);
-          setOnlineUsers((prev) => Array.from(new Set([...prev, receivedData.sender])));
+          setOnlineUsers((prev) => [...new Set([...prev, receivedData.sender])]);
         }
         return;
       }
 
-      if (receivedData.text?.trim() || receivedData.audioUrl || receivedData.fileUrl) {
+      if (receivedData.type === "leave") {
         setMessages((prev) => [...prev, receivedData]);
+        setOnlineUsers((prev) => prev.filter((user) => user !== receivedData.sender));
+        return;
       }
 
       if (receivedData.type === "typing" && receivedData.sender !== username) {
         setIsTyping(true);
         setTimeout(() => setIsTyping(false), 2000);
+        return;
+      }
+
+      if (receivedData.sender !== username && (receivedData.text || receivedData.audioUrl || receivedData.fileUrl)) {
+        setMessages((prev) => [...prev, receivedData]);
       }
     }
   }, [lastMessage, messages, username]);
@@ -60,6 +66,17 @@ const Chat: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (username) {
+        sendMessage(JSON.stringify({ sender: username, text: `${username} exited the chat`, type: "leave", time: new Date().toLocaleTimeString() }));
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [username, sendMessage]);
 
   const handleJoinChat = () => {
     if (input.trim() !== "") {
@@ -130,6 +147,7 @@ const Chat: React.FC = () => {
       sender: username,
       fileUrl,
       fileName: file.name,
+      fileType: file.type,
       time: new Date().toLocaleTimeString(),
       type: "file",
     };
@@ -169,7 +187,7 @@ const Chat: React.FC = () => {
         <>
           <div className="chat-box">
             {messages.map((msg, i) => (
-              msg.type === "join" ? (
+              msg.type === "join" || msg.type === "leave" ? (
                 <div key={i} className="join-message">
                   <em style={{ textAlign: "center", display: "block", color: darkMode ? "#bbb" : "#555" }}>{msg.text}</em>
                 </div>
@@ -178,7 +196,11 @@ const Chat: React.FC = () => {
                   <strong style={{ color: darkMode ? "#eee" : "#000" }}>{msg.sender}: </strong>
                   {msg.text && <span style={{ color: darkMode ? "#fff" : "#000" }}>{msg.text}</span>}
                   {msg.audioUrl && <audio controls src={msg.audioUrl} />}
-                  {msg.fileUrl && <a href={msg.fileUrl} download={msg.fileName} className="file-link">📎 {msg.fileName}</a>}
+                  {msg.fileUrl && msg.fileType?.startsWith("image") ? (
+                    <img src={msg.fileUrl} alt="Shared" className="shared-image" />
+                  ) : msg.fileUrl ? (
+                    <a href={msg.fileUrl} download={msg.fileName} className="file-link">📎 {msg.fileName}</a>
+                  ) : null}
                   <small style={{ color: darkMode ? "#aaa" : "#555" }}>{msg.time}</small>
                 </div>
               )
