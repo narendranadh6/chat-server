@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
-import { FaPaperPlane, FaMicrophone, FaUser, FaUsers, FaMoon, FaSun, FaFile } from "react-icons/fa6";
+import EmojiPicker from "emoji-picker-react";
+import { FaRegSmile, FaSmile } from "react-icons/fa";
+
+import { EmojiClickData } from "emoji-picker-react";
+import { FaPaperPlane, FaMicrophone, FaUser, FaUsers, FaMoon, FaSun, FaPaperclip } from "react-icons/fa6";
 import "./Chat.css";
 
 const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
@@ -14,6 +18,7 @@ interface ChatMessage {
   fileUrl?: string;
   fileName?: string;
   fileType?: string;
+  seen?: boolean;
 }
 
 const Chat: React.FC = () => {
@@ -28,20 +33,30 @@ const Chat: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [darkMode, setDarkMode] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isDuplicate = (newMsg: ChatMessage) => {
+    return messages.some(
+      (msg) =>
+        msg.sender === newMsg.sender &&
+        msg.type === newMsg.type &&
+        msg.time === newMsg.time &&
+        msg.text === newMsg.text &&
+        msg.audioUrl === newMsg.audioUrl &&
+        msg.fileUrl === newMsg.fileUrl
+    );
+  };
 
   useEffect(() => {
     if (lastMessage !== null) {
       const receivedData: ChatMessage = JSON.parse(lastMessage.data);
+      if (isDuplicate(receivedData)) return;
 
       if (receivedData.type === "join") {
-        const exists = messages.some(
-          (msg) => msg.sender === receivedData.sender && msg.type === "join"
-        );
-        if (!exists) {
-          setMessages((prev) => [...prev, receivedData]);
-          setOnlineUsers((prev) => [...new Set([...prev, receivedData.sender])]);
-        }
+        setMessages((prev) => [...prev, receivedData]);
+        setOnlineUsers((prev) => [...new Set([...prev, receivedData.sender])]);
         return;
       }
 
@@ -58,6 +73,7 @@ const Chat: React.FC = () => {
       }
 
       if (receivedData.sender !== username && (receivedData.text || receivedData.audioUrl || receivedData.fileUrl)) {
+        receivedData.seen = true;
         setMessages((prev) => [...prev, receivedData]);
       }
     }
@@ -87,6 +103,7 @@ const Chat: React.FC = () => {
   };
 
   const handleSend = () => {
+    if (file) return handleFileSend();
     if (input.trim() === "" || username.trim() === "") return;
 
     const messageData = {
@@ -109,6 +126,7 @@ const Chat: React.FC = () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const recorder = new MediaRecorder(stream);
     setMediaRecorder(recorder);
+    setAudioChunks([]);
     recorder.start();
     setIsRecording(true);
 
@@ -157,10 +175,16 @@ const Chat: React.FC = () => {
     setFile(null);
   };
 
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) setFile(droppedFile);
+  };
+
   return (
-    <div className={`chat-container ${darkMode ? "dark" : ""}`}>
+    <div className={`chat-container ${darkMode ? "dark" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       <div className="chat-header">
-        <h2>💬 Chat App</h2>
+        <h2><FaUsers /> Chat App</h2>
         <button className="toggle-theme" onClick={() => setDarkMode(!darkMode)}>
           {darkMode ? <FaSun /> : <FaMoon />}
         </button>
@@ -195,7 +219,9 @@ const Chat: React.FC = () => {
                 <div key={i} className={`message ${msg.sender === username ? "sent" : "received"}`}>
                   <strong style={{ color: darkMode ? "#eee" : "#000" }}>{msg.sender}: </strong>
                   {msg.text && <span style={{ color: darkMode ? "#fff" : "#000" }}>{msg.text}</span>}
-                  {msg.audioUrl && <audio controls src={msg.audioUrl} />}
+                  {msg.audioUrl && (
+                    <audio controls src={msg.audioUrl} className="audio-bubble" />
+                  )}
                   {msg.fileUrl && msg.fileType?.startsWith("image") ? (
                     <img src={msg.fileUrl} alt="Shared" className="shared-image" />
                   ) : msg.fileUrl ? (
@@ -210,6 +236,23 @@ const Chat: React.FC = () => {
           </div>
 
           <div className="input-area">
+            <button className="emoji-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}><FaSmile /></button>
+            {showEmojiPicker && (
+              <div className="emoji-picker">
+                <EmojiPicker
+  onEmojiClick={(emojiObject: EmojiClickData) => setInput((prev) => prev + emojiObject.emoji)}
+/>
+              </div>
+            )}
+            <label className="file-label">
+              <FaPaperclip />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                style={{ display: "none" }}
+              />
+            </label>
             <input
               type="text"
               placeholder="Type a message..."
@@ -221,10 +264,20 @@ const Chat: React.FC = () => {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               className="chat-input"
             />
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            <button onClick={handleFileSend} className="send-btn"><FaFile /></button>
-            <button onClick={handleSend} className="send-btn"><FaPaperPlane /></button>
-            <button onClick={startRecording} className="record-btn"><FaMicrophone /></button>
+            {file && <span className="file-preview">📎 {file.name}</span>}
+            {isRecording && <span className="recording-label">🎙️ Recording...</span>}
+            <button
+              onClick={handleSend}
+              className={`send-btn ${file || isRecording ? "glow" : ""}`}
+            >
+              <FaPaperPlane />
+            </button>
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              className="record-btn"
+            >
+              <FaMicrophone />
+            </button>
           </div>
         </>
       )}
