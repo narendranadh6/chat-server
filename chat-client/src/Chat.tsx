@@ -2,288 +2,208 @@ import React, { useState, useEffect, useRef } from "react";
 import useWebSocket from "react-use-websocket";
 import EmojiPicker from "emoji-picker-react";
 import { FaRegSmile, FaSmile } from "react-icons/fa";
-
 import { EmojiClickData } from "emoji-picker-react";
-import { FaPaperPlane, FaMicrophone, FaUser, FaUsers, FaMoon, FaSun, FaPaperclip } from "react-icons/fa6";
+import { FaPaperPlane, FaMicrophone, FaUser, FaUsers, FaMoon, FaSun, FaPaperclip, FaPlus } from "react-icons/fa6";
 import "./Chat.css";
+import { roomApi } from "./api";
 
-const WS_URL = "wss://chat-server-production-ed2c.up.railway.app";
+const WS_URL = "ws://localhost:3000";
 
 interface ChatMessage {
+  id?: number;
   sender: string;
   text?: string;
   time: string;
   type?: string;
-  audioUrl?: string;
-  fileUrl?: string;
-  fileName?: string;
-  fileType?: string;
-  seen?: boolean;
+  metadata?: any;
 }
 
 const Chat: React.FC = () => {
-  const { sendMessage, lastMessage } = useWebSocket(WS_URL);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
   const [username, setUsername] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [isJoined, setIsJoined] = useState(false);
+  const [input, setInput] = useState("");
+  const [currentRoom, setCurrentRoom] = useState("General");
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
+    shouldReconnect: (closeEvent) => true,
+  });
 
-  const isDuplicate = (newMsg: ChatMessage) => {
-    return messages.some(
-      (msg) =>
-        msg.sender === newMsg.sender &&
-        msg.type === newMsg.type &&
-        msg.time === newMsg.time &&
-        msg.text === newMsg.text &&
-        msg.audioUrl === newMsg.audioUrl &&
-        msg.fileUrl === newMsg.fileUrl
-    );
-  };
+  // Fetch rooms on mount
+  useEffect(() => {
+    // In a real app, we'd use a token. For now, we'll bypass auth for simplicity
+    // or provide a dummy token if the backend requires it.
+    const fetchRooms = async () => {
+        try {
+            // const res = await roomApi.list("dummy-token");
+            // setRooms(res.data);
+            setRooms([{ id: 1, name: "General" }, { id: 2, name: "AI_Help" }]);
+        } catch (err) {
+            console.error("Failed to fetch rooms", err);
+        }
+    };
+    fetchRooms();
+  }, []);
 
   useEffect(() => {
     if (lastMessage !== null) {
-      const receivedData: ChatMessage = JSON.parse(lastMessage.data);
-      if (isDuplicate(receivedData)) return;
-
-      if (receivedData.type === "join") {
-        setMessages((prev) => [...prev, receivedData]);
-        setOnlineUsers((prev) => [...new Set([...prev, receivedData.sender])]);
+      const data = JSON.parse(lastMessage.data);
+      
+      if (data.type === "history") {
+        setMessages(data.data.map((m: any) => ({
+            ...m,
+            time: new Date(m.created_at).toLocaleTimeString()
+        })));
         return;
       }
 
-      if (receivedData.type === "leave") {
-        setMessages((prev) => [...prev, receivedData]);
-        setOnlineUsers((prev) => prev.filter((user) => user !== receivedData.sender));
+      if (data.type === "join") {
+        setOnlineUsers((prev) => [...new Set([...prev, data.sender])]);
         return;
       }
 
-      if (receivedData.type === "typing" && receivedData.sender !== username) {
+      if (data.type === "leave") {
+        setOnlineUsers((prev) => prev.filter((user) => user !== data.sender));
+        return;
+      }
+
+      if (data.type === "typing" && data.sender !== username) {
         setIsTyping(true);
-        setTimeout(() => setIsTyping(false), 2000);
+        setTimeout(() => setIsTyping(false), 3000);
         return;
       }
 
-      if (receivedData.sender !== username && (receivedData.text || receivedData.audioUrl || receivedData.fileUrl)) {
-        receivedData.seen = true;
-        setMessages((prev) => [...prev, receivedData]);
+      if (data.type === "message") {
+        setMessages((prev) => [...prev, data]);
       }
     }
-  }, [lastMessage, messages, username]);
+  }, [lastMessage, username]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (username) {
-        sendMessage(JSON.stringify({ sender: username, text: `${username} exited the chat`, type: "leave", time: new Date().toLocaleTimeString() }));
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [username, sendMessage]);
-
   const handleJoinChat = () => {
-    if (input.trim() !== "") {
-      setUsername(input);
-      sendMessage(JSON.stringify({ sender: input, text: `${input} joined the chat`, type: "join", time: new Date().toLocaleTimeString() }));
-      setInput("");
+    if (username.trim() !== "") {
+      setIsJoined(true);
+      sendMessage(JSON.stringify({ type: "join", sender: username, room: currentRoom }));
     }
   };
 
   const handleSend = () => {
-    if (file) return handleFileSend();
-    if (input.trim() === "" || username.trim() === "") return;
+    if (input.trim() === "") return;
 
     const messageData = {
+      type: "message",
       sender: username,
       text: input,
-      time: new Date().toLocaleTimeString(),
-      type: "message",
+      room: currentRoom,
     };
 
     sendMessage(JSON.stringify(messageData));
-    setMessages((prev) => [...prev, messageData]);
     setInput("");
   };
 
-  const handleTyping = () => {
-    sendMessage(JSON.stringify({ sender: username, type: "typing" }));
+  const switchRoom = (roomName: string) => {
+    if (roomName === currentRoom) return;
+    setMessages([]);
+    setCurrentRoom(roomName);
+    sendMessage(JSON.stringify({ type: "join", sender: username, room: roomName }));
   };
 
-  const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    setMediaRecorder(recorder);
-    setAudioChunks([]);
-    recorder.start();
-    setIsRecording(true);
-
-    recorder.ondataavailable = (event) => {
-      setAudioChunks((prev) => [...prev, event.data]);
-    };
-  };
-
-  const stopRecording = () => {
-    if (!mediaRecorder) return;
-    mediaRecorder.stop();
-    setIsRecording(false);
-
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      const audioMessage = {
-        sender: username,
-        audioUrl,
-        time: new Date().toLocaleTimeString(),
-        type: "audio",
-      };
-
-      sendMessage(JSON.stringify(audioMessage));
-      setMessages((prev) => [...prev, audioMessage]);
-      setAudioChunks([]);
-    };
-  };
-
-  const handleFileSend = () => {
-    if (!file) return;
-    const fileUrl = URL.createObjectURL(file);
-
-    const fileMessage = {
-      sender: username,
-      fileUrl,
-      fileName: file.name,
-      fileType: file.type,
-      time: new Date().toLocaleTimeString(),
-      type: "file",
-    };
-
-    sendMessage(JSON.stringify(fileMessage));
-    setMessages((prev) => [...prev, fileMessage]);
-    setFile(null);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) setFile(droppedFile);
-  };
-
-  return (
-    <div className={`chat-container ${darkMode ? "dark" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-      <div className="chat-header">
-        <h2><FaUsers /> Chat App</h2>
-        <button className="toggle-theme" onClick={() => setDarkMode(!darkMode)}>
-          {darkMode ? <FaSun /> : <FaMoon />}
-        </button>
-      </div>
-
-      {username && (
-        <div className="chat-info">
-          <FaUser /> You joined as <b>{username}</b>
-        </div>
-      )}
-
-      {!username ? (
-        <div className="join-container">
+  if (!isJoined) {
+    return (
+      <div className="join-screen">
+        <div className="join-card">
+          <h1>🚀 Scalable Chat</h1>
+          <p>Real-time, AI-powered, Production Grade</p>
           <input
             type="text"
-            placeholder="Enter your name..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            className="chat-input"
+            placeholder="Enter your username..."
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleJoinChat()}
           />
-          <button onClick={handleJoinChat} className="join-btn">Join</button>
+          <button onClick={handleJoinChat}>Join Chat</button>
         </div>
-      ) : (
-        <>
-          <div className="chat-box">
-            {messages.map((msg, i) => (
-              msg.type === "join" || msg.type === "leave" ? (
-                <div key={i} className="join-message">
-                  <em style={{ textAlign: "center", display: "block", color: darkMode ? "#bbb" : "#555" }}>{msg.text}</em>
-                </div>
-              ) : (
-                <div key={i} className={`message ${msg.sender === username ? "sent" : "received"}`}>
-                  <strong style={{ color: darkMode ? "#eee" : "#000" }}>{msg.sender}: </strong>
-                  {msg.text && <span style={{ color: darkMode ? "#fff" : "#000" }}>{msg.text}</span>}
-                  {msg.audioUrl && (
-                    <audio controls src={msg.audioUrl} className="audio-bubble" />
-                  )}
-                  {msg.fileUrl && msg.fileType?.startsWith("image") ? (
-                    <img src={msg.fileUrl} alt="Shared" className="shared-image" />
-                  ) : msg.fileUrl ? (
-                    <a href={msg.fileUrl} download={msg.fileName} className="file-link">📎 {msg.fileName}</a>
-                  ) : null}
-                  <small style={{ color: darkMode ? "#aaa" : "#555" }}>{msg.time}</small>
-                </div>
-              )
-            ))}
-            <div ref={messagesEndRef} />
-            {isTyping && <p className="typing-indicator">Someone is typing...</p>}
-          </div>
+      </div>
+    );
+  }
 
-          <div className="input-area">
-            <button className="emoji-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}><FaSmile /></button>
-            {showEmojiPicker && (
-              <div className="emoji-picker">
-                <EmojiPicker
-  onEmojiClick={(emojiObject: EmojiClickData) => setInput((prev) => prev + emojiObject.emoji)}
-/>
+  return (
+    <div className={`chat-container ${darkMode ? "dark" : ""}`}>
+      <div className="sidebar">
+        <h2><FaUsers /> Rooms</h2>
+        <div className="room-list">
+          {rooms.map((room) => (
+            <div
+              key={room.id}
+              className={`room-item ${currentRoom === room.name ? "active" : ""}`}
+              onClick={() => switchRoom(room.name)}
+            >
+              # {room.name}
+            </div>
+          ))}
+        </div>
+        <div className="online-section">
+            <h3>Online ({onlineUsers.length})</h3>
+            <div className="user-list">
+                {onlineUsers.map(user => (
+                    <div key={user} className="user-pill">{user}</div>
+                ))}
+            </div>
+        </div>
+      </div>
+
+      <div className="chat-main">
+        <div className="chat-header">
+          <h2># {currentRoom}</h2>
+          <div className="header-actions">
+            <button className="theme-btn" onClick={() => setDarkMode(!darkMode)}>
+               {darkMode ? <FaSun /> : <FaMoon />}
+            </button>
+          </div>
+        </div>
+
+        <div className="chat-box">
+          {messages.map((msg, i) => (
+            <div key={i} className={`message ${msg.sender === username ? "sent" : "received"} ${msg.sender === "AI_Assistant" ? "ai" : ""}`}>
+              <div className="msg-info">
+                <strong>{msg.sender}</strong>
+                <span>{msg.time}</span>
               </div>
-            )}
-            <label className="file-label">
-              <FaPaperclip />
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                style={{ display: "none" }}
-              />
-            </label>
-            <input
-              type="text"
-              placeholder="Type a message..."
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                handleTyping();
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              className="chat-input"
-            />
-            {file && <span className="file-preview">📎 {file.name}</span>}
-            {isRecording && <span className="recording-label">🎙️ Recording...</span>}
-            <button
-              onClick={handleSend}
-              className={`send-btn ${file || isRecording ? "glow" : ""}`}
-            >
-              <FaPaperPlane />
-            </button>
-            <button
-              onClick={isRecording ? stopRecording : startRecording}
-              className="record-btn"
-            >
-              <FaMicrophone />
-            </button>
-          </div>
-        </>
-      )}
+              <div className="msg-content">
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+          {isTyping && <div className="typing-indicator">Someone is typing...</div>}
+        </div>
 
-      <div className="online-users">
-        <FaUsers /> Online: {onlineUsers.join(", ") || "No one"}
+        <div className="input-area">
+          <input
+            type="text"
+            placeholder="Type @ai for help..."
+            value={input}
+            onChange={(e) => {
+                setInput(e.target.value);
+                if (input.length % 5 === 0) {
+                    sendMessage(JSON.stringify({ type: "typing", sender: username, room: currentRoom }));
+                }
+            }}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          />
+          <button onClick={handleSend} className="send-btn">
+            <FaPaperPlane />
+          </button>
+        </div>
       </div>
     </div>
   );
