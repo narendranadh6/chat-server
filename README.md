@@ -1,73 +1,52 @@
-# Scalable Chat Server with AI Assistant
+# Scalable Real-Time Chat (FastAPI Backend)
 
-A production-grade, scalable, real-time chat system built with Node.js, Express, WebSockets, Redis, and PostgreSQL. Features an integrated AI assistant powered by OpenAI.
+A production-grade, highly scalable chat application backend shifted from Node.js to **FastAPI**. It leverages WebSockets for real-time messaging, Redis Pub/Sub for horizontal scaling across multiple instances, and PostgreSQL for persistent data storage.
 
-## 🚀 Features
-
-- **Real-time Messaging**: Instant communication across clients.
-- **Multi-room Support**: Create and join different chat rooms.
-- **Horizontal Scalability**: Redis Pub/Sub ensures messages are distributed across multiple server instances.
-- **Persistent History**: Chat history is stored in PostgreSQL and loaded upon joining a room.
-- **AI Assistant**: Interact with an AI assistant by mentioning `@ai` in any chat room.
-- **Online Presence**: Track online users in real-time.
-- **Typing Indicators**: See when others are typing.
-- **Health Checks & Reliability**: Includes rate limiting, connection limits, and robust error handling.
+## 🚀 Tech Stack
+- **Framework**: FastAPI (Python 3.11+)
+- **Database**: PostgreSQL with SQLAlchemy (Async)
+- **Real-time**: WebSockets + Redis Pub/Sub
+- **Containerization**: Docker & Docker Compose
 
 ## 🏗 Architecture
-
 ```mermaid
 graph TD
-    Client[React Client] <--> WS[WebSocket Server]
-    Client <--> API[REST API]
-    WS <--> Redis[Redis Pub/Sub]
+    Client[React Client] <--> WS[FastAPI WebSocket]
+    Client <--> API[FastAPI REST API]
+    WS <--> Redis[Redis Pub/Sub Channel]
     WS <--> DB[(PostgreSQL)]
     API <--> DB
-    API <--> AI[OpenAI API]
-    WS <--> AI
 ```
 
-## 🛠 Setup Instructions
+## 🛠 Setup & Run Instructions
 
-### Prerequisites
-- Node.js (v16+)
-- PostgreSQL
-- Redis
-- OpenAI API Key
+### Using Docker Compose (Recommended)
+You can spawn the entire ecosystem (FastAPI Backend, PostgreSQL DB, and Redis) using Docker.
 
-### Backend Setup
-1. Clone the repository.
-2. Install dependencies: `npm install`.
-3. Create a `.env` file based on `.env.example`:
-   ```env
-   PORT=3000
-   DATABASE_URL=postgres://user:pass@localhost:5432/chatdb
-   REDIS_URL=redis://localhost:6379
-   OPENAI_API_KEY=your_api_key
-   JWT_SECRET=your_secret
+1. Clone the repository and navigate to the project root.
+2. Build and spin up the containers:
+   ```bash
+   docker-compose up --build -d
    ```
-4. Start the server: `npm start`.
+3. The FastAPI app will be available at `http://localhost:8000`.
+   - Swagger Documentation: `http://localhost:8000/docs`
 
-### Frontend Setup
-1. Navigate to `chat-client`.
-2. Install dependencies: `npm install`.
-3. Start the React app: `npm start`.
+### Manual Setup
+1. Setup a Python virtual environment: `python3 -m venv venv && source venv/bin/activate`
+2. Install dependencies: `pip install -r backend/requirements.txt`
+3. Configure your `.env` file (see `.env.example`).
+4. Start the server:
+   ```bash
+   cd backend && uvicorn main:app --reload
+   ```
 
-## 📡 API Endpoints
-
-### Authentication
-- `POST /api/auth/register`: Create a new account.
-- `POST /api/auth/login`: Login and receive a JWT.
-
-### Rooms
-- `GET /api/rooms`: List all chat rooms.
-- `POST /api/rooms`: Create a new chat room.
-
-### AI
-- `POST /api/ai/chat`: Direct interaction with AI.
-- `POST /api/ai/summarize`: Summarize chat history.
+## 📡 API Endpoints (REST & WS)
+- **REST APIs**: 
+  - `POST /api/users` (Create User)
+  - `GET /api/rooms` (List Rooms)
+  - `POST /api/rooms` (Create Room)
+  - `GET /api/messages/{room_id}` (Chat History)
+- **WebSocket Route**: `ws://localhost:8000/ws/chat/{room_name}?username={username}`
 
 ## 🤝 Contributing
-Feel free to open issues or submit pull requests.
-
-## 📜 License
-MIT
+Open issues and PRs on the repository. Do not commit secrets.
